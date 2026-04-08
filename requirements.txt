@@ -1,6 +1,5 @@
 streamlit
 pymupdf
-pytesseract
 Pillow
 sentence-transformers
 faiss-cpu
