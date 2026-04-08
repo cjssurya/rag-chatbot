@@ -12,7 +12,7 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 # ------------------ CONFIG ------------------
 st.set_page_config(page_title="Chat with PDF", layout="wide")
 
-# ------------------ UI STYLE ------------------
+# ------------------ UI ------------------
 st.markdown("""
 <style>
 .main {background-color: #0E1117; color: white;}
@@ -26,11 +26,17 @@ st.markdown('<div class="big-title">🤖 Chat with Your PDF</div>', unsafe_allow
 st.markdown('<div class="subtitle">Upload PDF & Ask Questions</div>', unsafe_allow_html=True)
 st.divider()
 
-# ------------------ MODELS ------------------
+# ------------------ LOAD MODELS ------------------
 @st.cache_resource
 def load_models():
     embed_model = SentenceTransformer("all-MiniLM-L6-v2")
-    generator = pipeline("text2text-generation", model="google/flan-t5-base")
+
+    # FIXED: use supported pipeline
+    generator = pipeline(
+        "text-generation",
+        model="gpt2"
+    )
+
     return embed_model, generator
 
 embed_model, generator = load_models()
@@ -56,7 +62,7 @@ def create_faiss(chunks):
     embeddings = embed_model.encode(chunks).astype("float32")
     index = faiss.IndexFlatL2(embeddings.shape[1])
     index.add(embeddings)
-    return index, embeddings
+    return index
 
 def generate_answer(query, chunks, index):
     q_embed = embed_model.encode([query]).astype("float32")
@@ -65,17 +71,16 @@ def generate_answer(query, chunks, index):
     context = "\n".join([chunks[i] for i in I[0]])
 
     prompt = f"""
-    Answer ONLY using the context below.
-    If not found, say "Not available".
+    Answer based on the context below:
 
-    Context:
     {context}
 
     Question: {query}
+    Answer:
     """
 
-    result = generator(prompt, max_length=200)[0]["generated_text"]
-    return result
+    result = generator(prompt, max_length=200, num_return_sequences=1)
+    return result[0]["generated_text"]
 
 # ------------------ LAYOUT ------------------
 col1, col2 = st.columns([1, 2])
@@ -91,7 +96,7 @@ with col1:
             raw_text = extract_text(uploaded_file)
             cleaned = clean_text(raw_text)
             chunks = chunk_text(cleaned)
-            index, embeddings = create_faiss(chunks)
+            index = create_faiss(chunks)
 
         st.session_state.chunks = chunks
         st.session_state.index = index
